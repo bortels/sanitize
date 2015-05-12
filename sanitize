@@ -1,0 +1,90 @@
+#!/usr/bin/perl
+
+# sanitize history files.
+#
+# I test from the command line - a lot. And bits of sensitive data (mostly credentials)
+# tend to creep in, and get immortalized in my history files, waiting for some savvy
+# script kiddie to make my life difficult. Maybe this will help.
+#
+# Called with no parameters, it reads "~/.sanitize" for a list of hashes,
+# then iterates thru files in the home directory matching ".*_history", checking
+# for any character sequences that match the hash list, replacing any found with
+# some underscores.
+#
+# Called with an argument, it adds the hash of that argument to the .sanitize file.
+# Calling this with an argument, be sure to prepend a space or run it again without
+# an argument afterwards to remove your plaintext password.
+#
+# Note you may need to login/logout to make your shell reflect these changes.
+#
+# This was written on OS X under Oh My Zsh! - I expect it to work other places, but YMMV.
+# In zsh, I use this by adding a "trap 'sanitize' EXIT' to my .zshrc, so it is run automatically
+# when I exit the shell. Seems to work. 
+#
+# Why perl? because perl is everywhere, and so this should run without prereqs anywhere.
+# except maybe windows. Dunno.
+
+use Digest::MD5 qw(md5_base64);
+
+$config = $ENV{'HOME'} . "/.sanitize";
+
+### end config area
+
+### add terms
+$a = shift @ARGV;
+if ($a) {
+   open(my $fh, '>>', $config);
+   print $fh md5_base64($a) . ' ' . length($a) . "\n";
+   close $fh;
+   print "Added your term to $config\n";
+   exit;
+}
+
+### load hashes
+open(my $in, '<:encoding(UTF-8)', $config);
+while (<$in>) {
+  chomp;
+  ($hash, $length) = split(/ /, $_);
+  $DB{$hash} = $length;
+  $LENS{$length} = 1;
+}
+close $in;
+### Sanitize a file
+sub sanitize_history {
+  $del = chr(127);
+  $histname = shift @_;
+  $houtname = $histname . ".new";
+  #open(my $hin, '<:encoding(UTF-8)', $histname) or die $@;
+  open(my $hin, '<', $histname) or die $@;
+  open(my $hout, '>', $houtname);
+  while ($line = <$hin>) {
+    chomp $line;
+    foreach $s (reverse sort { $a <=> $b }  keys %LENS) {
+      for $i (0..length($line)-$s) {
+         $c = substr($line, $i, $s);
+         $m = md5_base64($c);
+         if ($DB{$m}) { substr $line, $i, $s, $del x $s; }
+         }
+      }
+    $line =~ s/([\x7f])\1{1,}/_______/ge;
+    print $hout $line . "\n";
+  }
+  close $hin; close $hout;
+  system("mv $histname $histname.old ; mv $houtname $histname");
+  unlink $houtname;
+}
+
+opendir(my $dh, $ENV{'HOME'}) || die "Can't read home directory";
+while(readdir $dh) {
+   if (/\..*_history$/) {
+      $n = $ENV{'HOME'} . '/' . $_;
+      sanitize_history($n);
+   }
+}
+closedir $dh;
+
+__END__
+
+This is an original work written in May, 2015 by Tom Bortels.
+
+It is released using a CC0 license - see the LICENSE file for details.
