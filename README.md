@@ -10,7 +10,7 @@ script kiddie to make my life difficult. Maybe this will help.
 
 Called with no parameters, it reads "~/.sanitize" for a list of hashes,
 then iterates thru files in the home directory matching ".*_history", checking
-#or any character sequences that match the hash list, replacing any found with
+for any character sequences that match the hash list, replacing any found with
 some underscores.
 
 Called with an argument, it adds the hash of that argument to the .sanitize file.
